@@ -4,28 +4,24 @@ import io
 import requests
 
 
-URLS = ['https://i.redd.it/d8021b5i2moy.jpg', 'https://i.redd.it/d8021b5i2moy.jpg', 'http://i.imgur.com/TKLs9lo.jpg']
-
-# configuration variables
-URL_FILE_DIR = 'urls.txt'
-
-# private helper variables
-img_urls = []
-
-
-def import_urls_from_file():
-    with open(URL_FILE_DIR, 'r') as urls:
+def import_urls_from_file(url_dir):
+    with open(url_dir, 'r') as urls:
+        chunk = []
         for url in urls:
-            img_urls.append(url.rstrip())
+            chunk.append(url.rstrip())
+            if len(chunk) >= 1000:
+                fetch_image(chunk)
+                chunk = []
 
 
 def rbg_to_hex(r, g, b):
+    # converts RBG values into hexidecimal
     return '#%02x%02x%02x' % (r, g, b)
 
 
 # Retrieve a single page and report the url and contents
 def load_url(url, timeout):
-    size = 150, 150
+    size = 100, 100
     url_string = requests.get(url).content
     img = Image.open(io.BytesIO(url_string))
     img.thumbnail(size, Image.ANTIALIAS)
@@ -37,31 +33,51 @@ def get_three_most_prevalent(img):
     pix_prev = {}
     first = second = third = (0, "")
     for x in img:
-        hexval = rbg_to_hex(x[0], x[1], x[2])
-        if hexval in pix_prev:
-            pix_prev[hexval] += 1
+        hex_val = rbg_to_hex(x[0], x[1], x[2])
+        if hex_val in pix_prev:
+            pix_prev[hex_val] += 1
         else:
-            pix_prev[hexval] = 1
-        if pix_prev[hexval] > first[0]:
-            first = (pix_prev[hexval], hexval)
-        elif pix_prev[hexval] > second[0] and pix_prev[hexval] < first[0]:
-            second = (pix_prev[hexval], hexval)
-        elif pix_prev[hexval] > third[0] and pix_prev[hexval] < second[0] and pix_prev[hexval] < first[0]:
-            third = (pix_prev[hexval], hexval)
-    return (first, second, third)
+            pix_prev[hex_val] = 1
+        if pix_prev[hex_val] > first[0]:
+            first = (pix_prev[hex_val], hex_val)
+        elif second[0] < pix_prev[hex_val] < first[0]:
+            second = (pix_prev[hex_val], hex_val)
+        elif third[0] < pix_prev[hex_val] < second[0] and pix_prev[hex_val] < first[0]:
+            third = (pix_prev[hex_val], hex_val)
+    return first, second, third
 
 
-import_urls_from_file()
+def fetch_image(urls_in):
+    # We can use a with statement to ensure threads are cleaned up promptly
+    csv_file = open('processed_images.csv','w')
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        # Start the load operations and mark each future with its URL
+        future_to_url = {executor.submit(load_url, url, 10): url for url in urls_in}
+        for future in concurrent.futures.as_completed(future_to_url):
+            url = future_to_url[future]
+            try:
+                data = future.result()
+            except Exception as exc:
+                print('%r generated an exception: %s' % (url, exc))
+            else:
+                most_prevalent = get_three_most_prevalent(data)
+                csv_file.write(f"{url}, {most_prevalent[0][1]}, {most_prevalent[1][1]}, {most_prevalent[2][1]}\n")
+        csv_file.close()
+        print('finished batch')
 
-# We can use a with statement to ensure threads are cleaned up promptly
-with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-    # Start the load operations and mark each future with its URL
-    future_to_url = {executor.submit(load_url, url, 60): url for url in img_urls}
-    for future in concurrent.futures.as_completed(future_to_url):
-        url = future_to_url[future]
+
+def process_urls():
+    url_in = input("Enter directory where URL file is stored: \n")
+    while True:
         try:
-            data = future.result()
+            with open(url_in, 'r') as urls:
+                urls.close()
+                print("Starting image processing...")
+                import_urls_from_file(url_in)
+                print("Completed image processing, see processed_images.csv for output.")
+                break
         except Exception as exc:
-            print('%r generated an exception: %s' % (url, exc))
-        else:
-            print(get_three_most_prevalent(data))
+            url_in = input("Could not find that directory, please try again: \n")
+
+
+process_urls()
