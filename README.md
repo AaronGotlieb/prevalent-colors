@@ -23,3 +23,6 @@ Finally, the result is printed into a CSV file titled: 'processed_images.csv'
 The CSV is formatted: URL, first, second, third\n
 eg:
 https://i.redd.it/ihczg3pmle3z.jpg, #a4ad9c, #afb8a7, #b0b9a8
+
+note: order will not be maintained between the input url text file and the CSV output
+
