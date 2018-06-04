@@ -1,6 +1,7 @@
 # prevalent-colors
 Takes a list of URL jpg images, returns a csv of the link, and the top 3 most prevalent colors
 
+Be sure to run this on Python3
 
 LOGIC:
 This application works to find the 3 most prevalent pixel colors in an image.
